@@ -1,0 +1,429 @@
+# file: scientific_calculator_app.py
+# ---------------------------------
+# This program creates a scientific calculator as a desktop app.
+# It has buttons, a display, and saves calculation history to disk.
+# It uses:
+# - Python (logic)
+# - Tkinter (GUI / window + buttons)
+# - JSON (saving data to a file)
+#
+# The program is split into "classes".
+# A class is like a blueprint for something with data + behavior.
+
+
+# =========================
+# IMPORTS (TOOLS WE NEED)
+# =========================
+
+from __future__ import annotations
+# Allows us to refer to a class inside itself (advanced safety feature)
+
+import json
+# Used to save/load calculation history in a file
+
+import math
+# Gives us math functions like sqrt()
+
+from dataclasses import dataclass
+# Lets us create simple data containers easily
+
+from datetime import datetime
+# Used to store the date and time of calculations
+
+from pathlib import Path
+# Helps work with file paths safely (macOS/Linux friendly)
+
+from typing import Any, Optional
+# Used for type hints (helps readability, not required to run)
+
+import tkinter as tk
+# Tkinter = Python’s built-in GUI library
+
+from tkinter import messagebox
+# Used to show pop-up messages
+
+
+# =========================
+# DATA MODEL
+# =========================
+
+@dataclass(frozen=True)
+class Calculation:
+    """
+    This class represents ONE saved calculation.
+
+    Think of it like a row in a notebook:
+    - What was typed
+    - What was the result
+    - When it happened
+    """
+
+    expression: str
+    # The math expression, e.g. "2+3*5"
+
+    result: str
+    # The final answer, e.g. "17"
+
+    timestamp_iso: str
+    # Date + time stored as text (ISO format)
+
+
+# =========================
+# SAVING & LOADING HISTORY
+# =========================
+
+class HistoryStore:
+    """
+    This class is responsible for:
+    - Saving calculations to a file
+    - Loading them back later
+
+    The calculator does NOT care how files work.
+    This class hides that complexity.
+    """
+
+    def __init__(self, file_path: Path) -> None:
+        # Store where the history file lives on disk
+        self._file_path = file_path
+
+    def load(self) -> list[Calculation]:
+        """
+        Load saved calculations from disk.
+        If the file does not exist, return an empty list.
+        """
+
+        if not self._file_path.exists():
+            # No history file yet
+            return []
+
+        try:
+            # Read text from file
+            text = self._file_path.read_text(encoding="utf-8")
+
+            # Convert JSON text into Python objects
+            raw_items = json.loads(text)
+
+            items: list[Calculation] = []
+
+            # Convert dictionaries into Calculation objects
+            for item in raw_items:
+                items.append(
+                    Calculation(
+                        expression=item["expression"],
+                        result=item["result"],
+                        timestamp_iso=item["timestamp_iso"],
+                    )
+                )
+
+            return items
+
+        except Exception:
+            # If anything goes wrong (corrupt file, etc.)
+            # just return an empty history
+            return []
+
+    def save_all(self, items: list[Calculation]) -> None:
+        """
+        Save ALL calculations to disk.
+        """
+
+        # Make sure the folder exists
+        self._file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert Calculation objects into dictionaries
+        data = [item.__dict__ for item in items]
+
+        # Save as formatted JSON
+        self._file_path.write_text(
+            json.dumps(data, indent=2),
+            encoding="utf-8"
+        )
+
+    def append(self, items: list[Calculation], calc: Calculation) -> list[Calculation]:
+        """
+        Add ONE calculation to history and save.
+        """
+
+        new_items = list(items)
+        new_items.append(calc)
+        self.save_all(new_items)
+        return new_items
+
+
+# =========================
+# CALCULATOR LOGIC (BRAIN)
+# =========================
+
+class CalculatorEngine:
+    """
+    This class does the MATH.
+
+    It:
+    - Stores what the user typed
+    - Edits it (backspace, clear)
+    - Evaluates it safely
+    """
+
+    def __init__(self) -> None:
+        self._expression = ""
+        # What the user is currently typing
+
+        self._last_expression: Optional[str] = None
+        self._last_result: Optional[str] = None
+        # Used when saving history
+
+    @property
+    def expression(self) -> str:
+        # Allows GUI to read the expression
+        return self._expression
+
+    @property
+    def last_expression(self) -> Optional[str]:
+        return self._last_expression
+
+    @property
+    def last_result(self) -> Optional[str]:
+        return self._last_result
+
+    def clear(self) -> None:
+        # Remove everything
+        self._expression = ""
+
+    def backspace(self) -> None:
+        # Remove last character if any
+        if self._expression:
+            self._expression = self._expression[:-1]
+
+    def append(self, text: str) -> None:
+        # Add a button press to the expression
+        self._expression += text
+
+    def sqrt(self) -> None:
+        # Wrap the expression in sqrt()
+        if not self._expression:
+            self._expression = "sqrt("
+        else:
+            self._expression = f"sqrt({self._expression})"
+
+    def power(self) -> None:
+        # Add ^ symbol (we convert it later)
+        self._expression += "^"
+
+    def evaluate(self) -> tuple[bool, str]:
+        """
+        Try to calculate the expression.
+
+        Returns:
+        - (True, result) on success
+        - (False, error message) on failure
+        """
+
+        if not self._expression.strip():
+            return False, "Nothing to calculate."
+
+        try:
+            # Convert ^ into Python power **
+            expr = self._expression.replace("^", "**")
+
+            # Convert percentages: 50% -> (50/100)
+            expr = self._handle_percent(expr)
+
+            # Allowed math functions ONLY
+            allowed = {
+                "sqrt": math.sqrt
+            }
+
+            # Evaluate safely (no builtins)
+            value = eval(expr, {"__builtins__": {}}, allowed)
+
+            # Format result nicely
+            if isinstance(value, float) and value.is_integer():
+                result = str(int(value))
+            else:
+                result = str(value)
+
+            # Save last calculation
+            self._last_expression = self._expression
+            self._last_result = result
+
+            # Show result in display
+            self._expression = result
+
+            return True, result
+
+        except ZeroDivisionError:
+            return False, "Division by zero."
+
+        except Exception:
+            return False, "Invalid input."
+
+    def _handle_percent(self, expr: str) -> str:
+        """
+        Converts percentages into math form.
+        Example:
+            10%  -> (10/100)
+            200*10% -> 200*(10/100)
+        """
+
+        output = ""
+        i = 0
+
+        while i < len(expr):
+            if expr[i] == "%":
+                # Walk backwards to find the number
+                j = len(output) - 1
+                while j >= 0 and (output[j].isdigit() or output[j] == "."):
+                    j -= 1
+
+                number = output[j + 1:]
+                output = output[:j + 1]
+                output += f"({number}/100)"
+                i += 1
+            else:
+                output += expr[i]
+                i += 1
+
+        return output
+
+
+# =========================
+# GUI (WINDOW + BUTTONS)
+# =========================
+
+class CalculatorApp(tk.Tk):
+    """
+    This class creates the WINDOW and BUTTONS.
+    """
+
+    def __init__(self, store: HistoryStore) -> None:
+        super().__init__()
+
+        self.title("Scientific Calculator")
+        self.resizable(False, False)
+
+        self.engine = CalculatorEngine()
+        self.store = store
+        self.history = self.store.load()
+
+        self.display_var = tk.StringVar()
+        self.status_var = tk.StringVar()
+
+        self._build_ui()
+        self._refresh_history()
+
+    def _build_ui(self) -> None:
+        # Display box
+        display = tk.Entry(
+            self,
+            textvariable=self.display_var,
+            font=("Arial", 18),
+            justify="right",
+            width=25
+        )
+        display.grid(row=0, column=0, columnspan=4, padx=10, pady=10)
+
+        # Error/status text
+        status = tk.Label(self, textvariable=self.status_var, fg="red")
+        status.grid(row=1, column=0, columnspan=4)
+
+        # Button layout
+        buttons = [
+            ("C", self.clear), ("⌫", self.backspace), ("%", lambda: self.press("%")), ("/", lambda: self.press("/")),
+            ("7", lambda: self.press("7")), ("8", lambda: self.press("8")), ("9", lambda: self.press("9")), ("*", lambda: self.press("*")),
+            ("4", lambda: self.press("4")), ("5", lambda: self.press("5")), ("6", lambda: self.press("6")), ("-", lambda: self.press("-")),
+            ("1", lambda: self.press("1")), ("2", lambda: self.press("2")), ("3", lambda: self.press("3")), ("+", lambda: self.press("+")),
+            ("0", lambda: self.press("0")), (".", lambda: self.press(".")), ("√", self.sqrt), ("^", self.power),
+        ]
+
+        r = 2
+        c = 0
+        for text, cmd in buttons:
+            tk.Button(self, text=text, width=6, height=2, command=cmd).grid(row=r, column=c, padx=5, pady=5)
+            c += 1
+            if c == 4:
+                c = 0
+                r += 1
+
+        tk.Button(self, text="=", width=26, command=self.equals).grid(row=r, column=0, columnspan=4, pady=5)
+        tk.Button(self, text="Save", width=26, command=self.save).grid(row=r + 1, column=0, columnspan=4)
+
+        self.history_list = tk.Listbox(self, width=40, height=10)
+        self.history_list.grid(row=0, column=4, rowspan=8, padx=10)
+        self.history_list.bind("<<ListboxSelect>>", self.load_history)
+
+    # -----------------
+    # Button handlers
+    # -----------------
+
+    def press(self, char: str) -> None:
+        self.status_var.set("")
+        self.engine.append(char)
+        self.display_var.set(self.engine.expression)
+
+    def clear(self) -> None:
+        self.engine.clear()
+        self.display_var.set("")
+        self.status_var.set("")
+
+    def backspace(self) -> None:
+        self.engine.backspace()
+        self.display_var.set(self.engine.expression)
+
+    def sqrt(self) -> None:
+        self.engine.sqrt()
+        self.display_var.set(self.engine.expression)
+
+    def power(self) -> None:
+        self.engine.power()
+        self.display_var.set(self.engine.expression)
+
+    def equals(self) -> None:
+        ok, msg = self.engine.evaluate()
+        if ok:
+            self.display_var.set(msg)
+            self.status_var.set("")
+        else:
+            self.status_var.set(msg)
+
+    def save(self) -> None:
+        if not self.engine.last_expression:
+            messagebox.showinfo("Nothing to save", "Calculate something first.")
+            return
+
+        calc = Calculation(
+            expression=self.engine.last_expression,
+            result=self.engine.last_result or "",
+            timestamp_iso=datetime.now().isoformat(timespec="seconds")
+        )
+
+        self.history = self.store.append(self.history, calc)
+        self._refresh_history()
+
+    def _refresh_history(self) -> None:
+        self.history_list.delete(0, tk.END)
+        for c in self.history:
+            self.history_list.insert(tk.END, f"{c.timestamp_iso} | {c.expression} = {c.result}")
+
+    def load_history(self, _event: Any) -> None:
+        sel = self.history_list.curselection()
+        if not sel:
+            return
+        calc = self.history[sel[0]]
+        self.engine.clear()
+        self.engine.append(calc.expression)
+        self.display_var.set(calc.expression)
+
+
+# =========================
+# PROGRAM STARTS HERE
+# =========================
+
+def main() -> None:
+    path = Path.home() / ".scientific_calculator" / "history.json"
+    store = HistoryStore(path)
+    app = CalculatorApp(store)
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
