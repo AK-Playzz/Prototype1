@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Customers</h2>
+
+  <div class="card">
+    <h3>Create customer</h3>
+    <form method="post" action="{{ url_for('create_customer') }}">
+      <label>Name <input name="full_name" required></label>
+      <label>Email <input name="email" required></label>
+      <label>Phone <input name="phone" required></label>
+      <button type="submit">Create</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Existing customers</h3>
+    {% if customers|length == 0 %}
+      <p>No customers yet.</p>
+    {% else %}
+      <table>
+        <tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>
+        {% for c in customers %}
+          <tr>
+            <td>{{ c["id"] }}</td>
+            <td>{{ c["full_name"] }}</td>
+            <td>{{ c["email"] }}</td>
+            <td>{{ c["phone"] }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  </div>
+{% endblock %}
