@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+
+  {% if mode == "create" %}
+    <h2>Create invoice</h2>
+    <form class="card" method="post" action="{{ url_for('invoice_create') }}">
+  {% else %}
+    <h2>Edit invoice #{{ invoice["id"] }}</h2>
+    <form class="card" method="post" action="{{ url_for('invoice_update', invoice_id=invoice['id']) }}">
+  {% endif %}
+
+    <label>
+      Customer
+      <select name="customer_id" required>
+        {% for c in customers %}
+          {% if invoice and c["id"] == invoice["customer_id"] %}
+            <option value="{{ c['id'] }}" selected>{{ c["full_name"] }}</option>
+          {% else %}
+            <option value="{{ c['id'] }}">{{ c["full_name"] }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Billing address
+      <textarea name="billing_address" rows="3" required>{% if invoice %}{{ invoice["billing_address"] }}{% endif %}</textarea>
+    </label>
+
+    <label>Description
+      <input name="description" required value="{% if invoice %}{{ invoice['description'] }}{% endif %}">
+    </label>
+
+    <label>Amount
+      <input name="amount" required value="{% if invoice %}{{ invoice['amount'] }}{% endif %}">
+    </label>
+
+    <label>Status
+      <select name="status" required>
+        {% set statuses = ["draft","sent","paid","cancelled"] %}
+        {% for s in statuses %}
+          {% if invoice and s == invoice["status"] %}
+            <option selected value="{{ s }}">{{ s }}</option>
+          {% else %}
+            <option value="{{ s }}">{{ s }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+
+    <button type="submit">{% if mode=="create" %}Create{% else %}Save{% endif %}</button>
+    <a class="btn-secondary" href="{{ url_for('index') }}">Cancel</a>
+
+  </form>
+{% endblock %}
