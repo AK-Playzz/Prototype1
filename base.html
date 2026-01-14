@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <h1>Invoice App</h1>
+        <nav>
+          <a href="{{ url_for('index') }}">Invoices</a>
+          <a href="{{ url_for('customers_page') }}">Customers</a>
+          <a href="{{ url_for('invoice_new_form') }}">New Invoice</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="msg msg-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
