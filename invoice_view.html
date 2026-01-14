@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Invoice #{{ invoice["id"] }}</h2>
+
+  <div class="card">
+    <p><b>Customer:</b> {{ invoice["customer_name"] }}</p>
+    <p><b>Status:</b> {{ invoice["status"] }}</p>
+    <p><b>Amount:</b> {{ "%.2f"|format(invoice["amount"]) }}</p>
+
+    <p><b>Billing address:</b></p>
+    <pre>{{ invoice["billing_address"] }}</pre>
+
+    <p><b>Description:</b> {{ invoice["description"] }}</p>
+
+    <p><b>Created:</b> {{ invoice["created_at"] }}</p>
+    <p><b>Updated:</b> {{ invoice["updated_at"] }}</p>
+
+    <a href="{{ url_for('invoice_edit_form', invoice_id=invoice['id']) }}">Edit</a>
+
+    <form class="inline" method="post" action="{{ url_for('invoice_delete', invoice_id=invoice['id']) }}">
+      <button type="submit" onclick="return confirm('Delete invoice?')">Delete</button>
+    </form>
+
+    <a class="btn-secondary" href="{{ url_for('index') }}">Back</a>
+  </div>
+{% endblock %}
