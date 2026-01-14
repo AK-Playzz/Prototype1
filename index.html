@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Invoices</h2>
+
+  {% if invoices|length == 0 %}
+    <p>No invoices yet.</p>
+  {% else %}
+    <table>
+      <tr><th>ID</th><th>Customer</th><th>Status</th><th>Amount</th><th>Actions</th></tr>
+      {% for inv in invoices %}
+        <tr>
+          <td>{{ inv["id"] }}</td>
+          <td>{{ inv["customer_name"] }}</td>
+          <td>{{ inv["status"] }}</td>
+          <td>{{ "%.2f"|format(inv["amount"]) }}</td>
+          <td>
+            <a href="{{ url_for('invoice_view', invoice_id=inv['id']) }}">View</a>
+            <a href="{{ url_for('invoice_edit_form', invoice_id=inv['id']) }}">Edit</a>
+            <form class="inline" method="post" action="{{ url_for('invoice_delete', invoice_id=inv['id']) }}">
+              <button type="submit" onclick="return confirm('Delete invoice?')">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+{% endblock %}
