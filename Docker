@@ -1,0 +1,24 @@
+# Use a small Linux image with Python installed
+FROM python:3.12-slim
+
+# Basic container settings (cleaner + better logs)
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# All commands run inside /app
+WORKDIR /app
+
+# Copy dependency list first (faster rebuilds)
+COPY requirements.txt /app/requirements.txt
+
+# Install dependencies (Flask + gunicorn)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of your project (app.py, templates/, static/, db.py, etc.)
+COPY . /app
+
+# The container will listen on 5000 internally
+EXPOSE 5000
+
+# Start the app using a production server (gunicorn)
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "app:app"]
